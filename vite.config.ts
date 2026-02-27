@@ -6,7 +6,10 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // For GitHub Pages, the base should be the repo name
-  const base = mode === 'production' ? '/Smart-Rubbish-Detection/' : '/'
+  // For Vercel/Netlify/other platforms, the base should be /
+  // Detect if we're building for GitHub Pages via environment variable
+  const isGitHubPages = process.env.GITHUB_ACTIONS === 'true';
+  const base = isGitHubPages ? '/Smart-Rubbish-Detection/' : '/';
 
   return {
     base,
