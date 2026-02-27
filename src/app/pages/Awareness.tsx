@@ -1,9 +1,11 @@
 import { Header } from '../components/Header';
 import { Leaf, Recycle, ShieldAlert, Book, AlertTriangle, CheckCircle2, XCircle, Scale, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
-import cityOfSydneyLogo from '../../assets/sydney-logo.png';
-import nswEpaLogo from '../../assets/epa-logo.png';
-import recyclingNearYouLogo from '../../assets/recycling-logo.png';
+
+// Using placeholder logo data URLs that work on any hosting platform
+const cityOfSydneyLogo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80"%3E%3Crect fill="%230066cc" width="200" height="80"/%3E%3Ctext x="100" y="45" font-family="Arial, sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold"%3ECity of Sydney%3C/text%3E%3C/svg%3E';
+const nswEpaLogo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80"%3E%3Crect fill="%2300a651" width="200" height="80"/%3E%3Ctext x="100" y="45" font-family="Arial, sans-serif" font-size="20" fill="white" text-anchor="middle" font-weight="bold"%3ENSW EPA%3C/text%3E%3C/svg%3E';
+const recyclingNearYouLogo = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80"%3E%3Crect fill="%2328a745" width="200" height="80"/%3E%3Ctext x="100" y="40" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" font-weight="bold"%3ERecycling%3C/text%3E%3Ctext x="100" y="58" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" font-weight="bold"%3ENear You%3C/text%3E%3C/svg%3E';
 
 export const Awareness = () => {
   return (

@@ -87,7 +87,7 @@ const createError = (code: string, message: string): StorageError => {
 };
 
 /**
- * Register a new community user with Supabase Auth
+ * Register a new community user using KV store
  */
 export const registerUser = async (
   email: string,
@@ -111,6 +111,18 @@ export const registerUser = async (
     const sanitizedEmail = sanitizeString(email.toLowerCase());
     const sanitizedName = sanitizeString(name);
 
+    // Check if user already exists in KV store
+    const existingUserKey = `user:${sanitizedEmail}`;
+    const { data: existingUser } = await supabase
+      .from('kv_store_3e3b490b')
+      .select('*')
+      .eq('key', existingUserKey)
+      .maybeSingle();
+
+    if (existingUser) {
+      return { user: null, error: createError('USER_EXISTS', 'An account with this email already exists') };
+    }
+
     // Sign up with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: sanitizedEmail,
@@ -120,10 +132,12 @@ export const registerUser = async (
           name: sanitizedName,
           role: 'user',
         },
+        emailRedirectTo: undefined,
       },
     });
 
     if (authError) {
+      console.error('Auth signup error:', authError);
       return { user: null, error: createError('AUTH_ERROR', authError.message) };
     }
 
@@ -131,34 +145,32 @@ export const registerUser = async (
       return { user: null, error: createError('AUTH_ERROR', 'Failed to create user') };
     }
 
-    // Create user profile in database
-    const { data: userData, error: dbError } = await supabase
-      .from('users')
-      .insert({
-        id: authData.user.id,
-        email: sanitizedEmail,
-        name: sanitizedName,
-        role: 'user',
-        eco_points: 0,
-        credits: 0,
-      })
-      .select()
-      .single();
-
-    if (dbError) {
-      return { user: null, error: createError('DB_ERROR', dbError.message) };
-    }
-
+    // Create user profile in KV store
+    const now = new Date().toISOString();
     const user: User = {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role as 'user' | 'admin',
-      ecoPoints: userData.eco_points,
-      credits: userData.credits,
-      createdAt: userData.created_at,
-      updatedAt: userData.updated_at,
+      id: authData.user.id,
+      email: sanitizedEmail,
+      name: sanitizedName,
+      role: 'user',
+      ecoPoints: 0,
+      credits: 0,
+      createdAt: now,
+      updatedAt: now,
     };
+
+    const { error: kvError } = await supabase
+      .from('kv_store_3e3b490b')
+      .insert({
+        key: existingUserKey,
+        value: user,
+      });
+
+    if (kvError) {
+      console.error('KV store error:', kvError);
+      // Try to clean up auth user if KV insert fails
+      await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {});
+      return { user: null, error: createError('DB_ERROR', 'Failed to create user profile') };
+    }
 
     return { user, error: null };
   } catch (error) {
@@ -168,7 +180,7 @@ export const registerUser = async (
 };
 
 /**
- * Login a user with Supabase Auth
+ * Login a user using KV store
  */
 export const loginUser = async (
   email: string,
@@ -188,6 +200,7 @@ export const loginUser = async (
     });
 
     if (authError) {
+      console.error('Auth login error:', authError);
       return { user: null, error: createError('INVALID_CREDENTIALS', 'Invalid email or password') };
     }
 
@@ -195,28 +208,20 @@ export const loginUser = async (
       return { user: null, error: createError('AUTH_ERROR', 'Failed to authenticate') };
     }
 
-    // Get user profile from database
-    const { data: userData, error: dbError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
+    // Get user profile from KV store
+    const userKey = `user:${sanitizedEmail}`;
+    const { data: kvData, error: kvError } = await supabase
+      .from('kv_store_3e3b490b')
+      .select('value')
+      .eq('key', userKey)
+      .maybeSingle();
 
-    if (dbError || !userData) {
+    if (kvError || !kvData) {
+      console.error('KV fetch error:', kvError);
       return { user: null, error: createError('DB_ERROR', 'Failed to fetch user profile') };
     }
 
-    const user: User = {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role as 'user' | 'admin',
-      ecoPoints: userData.eco_points,
-      credits: userData.credits,
-      createdAt: userData.created_at,
-      updatedAt: userData.updated_at,
-    };
-
+    const user: User = kvData.value as User;
     return { user, error: null };
   } catch (error) {
     console.error('Login error:', error);

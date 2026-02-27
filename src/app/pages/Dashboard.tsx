@@ -7,21 +7,57 @@ import { getReports, Report } from '../utils/storage';
 import { SYDNEY_LOCATIONS } from '../utils/mockData';
 import { Award, FileText, MapPin, TrendingUp, Plus, Calendar, Leaf, DollarSign, Gift } from 'lucide-react';
 import { format } from 'date-fns';
+import { projectId, publicAnonKey } from '../../../utils/supabase/info';
 
 export const Dashboard = () => {
-  const { user } = useAuth();
+  console.log('🏠 Dashboard: Component rendering');
+  
+  const { user, refreshUser } = useAuth();
+  console.log('👤 Dashboard: Current user', user);
+  
   const [reports, setReports] = useState<Report[]>([]);
   const [userReports, setUserReports] = useState<Report[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
-    const allReports = getReports();
-    setReports(allReports);
-    
+    console.log('🔄 Dashboard: useEffect - loading reports');
     if (user) {
-      const filtered = allReports.filter(r => r.userId === user.id);
-      setUserReports(filtered);
+      loadReportsAndUserData();
     }
-  }, [user]);
+  }, [user?.id]);
+  
+  const loadReportsAndUserData = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      // Fetch user's reports from server
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-3e3b490b/reports/user/${user.id}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const { reports: serverReports } = await response.json();
+        console.log('📋 Dashboard: Loaded user reports from server', serverReports.length);
+        setUserReports(serverReports || []);
+      } else {
+        console.error('Failed to load user reports from server');
+      }
+
+      // Refresh user data from server to get updated eco points
+      await refreshUser();
+    } catch (error) {
+      console.error('❌ Dashboard: Error loading data', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   
   const getStatusColor = (status: Report['status']) => {
     switch (status) {
