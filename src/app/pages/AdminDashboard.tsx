@@ -7,19 +7,62 @@ import { Shield, FileText, Users, TrendingUp, CheckCircle, Clock, AlertCircle, D
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { generateWeeklyReport, downloadWeeklyReportAsJSON, downloadWeeklyReportAsCSV, getNextSundayDate } from '../utils/reportGenerator';
+import { projectId, publicAnonKey } from '../../../utils/supabase/info';
 
 export const AdminDashboard = () => {
+  console.log('🏠 AdminDashboard: Component rendering');
+  
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<'all' | Report['status']>('all');
-  const stats = getUserStats();
+  const [isLoading, setIsLoading] = useState(true);
+  
+  let stats;
+  try {
+    stats = getUserStats();
+    console.log('📊 AdminDashboard: Stats loaded', stats);
+  } catch (error) {
+    console.error('❌ AdminDashboard: Error loading stats', error);
+    stats = {
+      totalMembers: 0,
+      totalReports: 0,
+      satisfaction: 0,
+    };
+  }
   
   useEffect(() => {
+    console.log('🔄 AdminDashboard: useEffect - loading reports');
     loadReports();
   }, []);
   
-  const loadReports = () => {
-    const allReports = getReports();
-    setReports(allReports);
+  const loadReports = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch reports from server
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-3e3b490b/reports/list`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const { reports: serverReports } = await response.json();
+        console.log('📋 AdminDashboard: Loaded reports from server', serverReports.length);
+        setReports(serverReports || []);
+      } else {
+        console.error('Failed to load reports from server');
+        toast.error('Failed to load reports');
+      }
+    } catch (error) {
+      console.error('❌ AdminDashboard: Error loading reports', error);
+      toast.error('Error loading reports');
+      setReports([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const handleStatusChange = (reportId: string, newStatus: Report['status']) => {
@@ -27,49 +70,38 @@ export const AdminDashboard = () => {
     const report = reports.find(r => r.id === reportId);
     if (!report) return;
     
-    // Update the report status
-    updateReportStatus(reportId, newStatus);
-    
-    // Send notification and email if status is reviewed or resolved
-    if (newStatus === 'reviewed' || newStatus === 'resolved') {
-      // Get all users to find the reporter's email
-      const allUsers = getAllUsers();
-      const reporter = allUsers.find(u => u.id === report.userId);
-      
-      if (reporter) {
-        // Create in-app notification
-        createNotification(
-          report.userId,
-          reportId,
-          newStatus === 'reviewed' ? 'report_reviewed' : 'report_resolved',
-          {
-            type: report.type,
-            address: report.location.address,
-          }
-        );
-        
-        // Send email notification (simulated)
-        const subject = newStatus === 'reviewed' 
-          ? '✅ Your Report Has Been Reviewed - Smart Rubbish Detection'
-          : '🎉 Your Report Has Been Resolved - Smart Rubbish Detection';
-        
-        const body = newStatus === 'reviewed'
-          ? `Dear ${reporter.name},\n\nYour report about "${report.type}" at ${report.location.address} has been reviewed by our team.\n\nWe are working on resolving this issue. Thank you for helping keep Sydney clean!\n\nBest regards,\nSmart Rubbish Detection Team\nCity of Sydney`
-          : `Dear ${reporter.name},\n\nGreat news! Your report about "${report.type}" at ${report.location.address} has been resolved.\n\nThank you for your contribution to keeping Sydney clean and beautiful. Your efforts make a real difference in our community!\n\nBest regards,\nSmart Rubbish Detection Team\nCity of Sydney`;
-        
-        sendEmailNotification(reporter.email, subject, body);
-        
-        // Show toast notification
-        toast.success(
-          `Report marked as ${newStatus}`,
-          {
-            description: `Email notification sent to ${reporter.email}`,
-          }
-        );
+    // Update the report status on server
+    updateReportStatusOnServer(reportId, newStatus);
+  };
+
+  const updateReportStatusOnServer = async (reportId: string, newStatus: Report['status']) => {
+    try {
+      // Update via server API
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-3e3b490b/reports/${reportId}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to update report status');
       }
+
+      // Show success message
+      toast.success(`Report marked as ${newStatus}`);
+
+      // Reload reports to reflect changes
+      await loadReports();
+    } catch (error) {
+      console.error('Error updating report status:', error);
+      toast.error('Failed to update report status');
     }
-    
-    loadReports();
   };
   
   const handleGenerateCSVReport = () => {

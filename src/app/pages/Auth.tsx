@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Header } from '../components/Header';
 import { useAuth } from '../context/AuthContext';
-import { loginUser, loginAdmin, registerUser } from '../utils/cloudStorage';
+import { loginUserFixed, loginAdminFixed, registerUserFixed } from '../utils/authFix';
 import { Shield, User, Mail, Lock, UserPlus, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,42 +26,69 @@ export const Auth = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('🚀 handleLogin called', { email, loginType });
+    
     if (!email || !password) {
       toast.error('Please fill in all fields');
       return;
     }
     
+    console.log('✅ Form validation passed, setting isSubmitting=true');
     setIsSubmitting(true);
     
     try {
       if (loginType === 'admin') {
-        const { user, error } = await loginAdmin(email, password);
+        console.log('👑 Calling loginAdminFixed...');
+        const result = await loginAdminFixed(email, password);
+        console.log('👑 loginAdminFixed returned:', result);
+        
+        const { user, error } = result;
         if (error) {
+          console.error('❌ Admin login error:', error);
           toast.error(error.message);
+          setIsSubmitting(false);
         } else if (user) {
+          console.log('✅ Admin login successful, user:', user);
           login(user);
           toast.success('Welcome back, Admin!');
           navigate('/admin');
+        } else {
+          console.error('⚠️ No user and no error returned');
+          toast.error('Login failed - no response');
+          setIsSubmitting(false);
         }
       } else {
-        const { user, error } = await loginUser(email, password);
+        console.log('👤 Calling loginUserFixed...');
+        const result = await loginUserFixed(email, password);
+        console.log('👤 loginUserFixed returned:', result);
+        
+        const { user, error } = result;
         if (error) {
+          console.error('❌ User login error:', error);
           toast.error(error.message);
+          setIsSubmitting(false);
         } else if (user) {
+          console.log('✅ User login successful, user:', user);
           login(user);
           toast.success('Welcome back!');
           navigate('/dashboard');
+        } else {
+          console.error('⚠️ No user and no error returned');
+          toast.error('Login failed - no response');
+          setIsSubmitting(false);
         }
       }
     } catch (error) {
+      console.error('💥 Login exception in Auth component:', error);
       toast.error('An unexpected error occurred');
-    } finally {
       setIsSubmitting(false);
     }
   };
   
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log('🚀 handleRegister called', { email, name });
     
     if (!email || !password || !name || !confirmPassword) {
       toast.error('Please fill in all fields');
@@ -73,20 +100,37 @@ export const Auth = () => {
       return;
     }
     
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    console.log('✅ Form validation passed, setting isSubmitting=true');
     setIsSubmitting(true);
     
     try {
-      const { user, error } = await registerUser(email, password, name);
+      console.log('📝 Calling registerUserFixed...');
+      const result = await registerUserFixed(email, password, name);
+      console.log('📝 registerUserFixed returned:', result);
+      
+      const { user, error } = result;
       if (error) {
+        console.error('❌ Registration error:', error);
         toast.error(error.message);
+        setIsSubmitting(false);
       } else if (user) {
+        console.log('✅ Registration successful, user:', user);
         login(user);
         toast.success('Account created successfully!');
         navigate('/dashboard');
+      } else {
+        console.error('⚠️ No user and no error returned');
+        toast.error('Registration failed - no response');
+        setIsSubmitting(false);
       }
     } catch (error) {
+      console.error('💥 Registration exception in Auth component:', error);
       toast.error('An unexpected error occurred');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -166,6 +210,29 @@ export const Auth = () => {
                 </div>
                 
                 <form onSubmit={handleLogin} className="space-y-5">
+                  {/* Admin Login Helper */}
+                  {loginType === 'admin' && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm">
+                      <p className="font-medium text-gray-900 mb-1">Admin Login Details:</p>
+                      <p className="text-gray-600 mb-2">
+                        Use any admin email: <span className="font-mono text-xs bg-white px-2 py-1 rounded border border-gray-200">admin1@sydney.gov.au</span>
+                      </p>
+                      <p className="text-gray-600">
+                        Password: <span className="font-mono text-xs bg-white px-2 py-1 rounded border border-gray-200">Admin@123</span>
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* User Login Helper */}
+                  {loginType === 'user' && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                      <p className="font-medium text-blue-900 mb-1">🌟 New User?</p>
+                      <p className="text-blue-700">
+                        Click the <strong>"Register"</strong> tab above to create your account first!
+                      </p>
+                    </div>
+                  )}
+                  
                   <div>
                     <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address
@@ -204,16 +271,6 @@ export const Auth = () => {
                       />
                     </div>
                   </div>
-                  
-                  {loginType === 'admin' && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                      <p className="font-medium text-blue-900 mb-1">🔐 Admin Access</p>
-                      <p className="text-blue-700">Use admin1 through admin4 accounts</p>
-                      <p className="text-xs mt-2 text-blue-600">
-                        Example: admin1@sydney.gov.au / Admin@123
-                      </p>
-                    </div>
-                  )}
                   
                   <button
                     type="submit"

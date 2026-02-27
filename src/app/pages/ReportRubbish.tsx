@@ -3,14 +3,31 @@ import { useNavigate } from 'react-router';
 import { Header } from '../components/Header';
 import { HeatMap } from '../components/HeatMap';
 import { useAuth } from '../context/AuthContext';
-import { saveReport, getReports, Report, getCurrentUser } from '../utils/storage';
 import { SYDNEY_LOCATIONS, RUBBISH_TYPES, LocationPoint } from '../utils/mockData';
 import { getCurrentLocation, reverseGeocode } from '../utils/geocoding';
 import { MapPin, Navigation, Camera, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { projectId, publicAnonKey } from '../../../utils/supabase/info';
+
+interface Report {
+  id: string;
+  userId: string;
+  type: string;
+  description: string;
+  photo?: string;
+  location: {
+    lat: number;
+    lng: number;
+    address: string;
+  };
+  timestamp: string;
+  status: 'pending' | 'reviewed' | 'resolved';
+  createdAt: string;
+  updatedAt: string;
+}
 
 export const ReportRubbish = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
   
   const [locationMode, setLocationMode] = useState<'auto' | 'manual'>('auto');
@@ -29,11 +46,33 @@ export const ReportRubbish = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([-33.8688, 151.2093]);
   const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(null);
   
+  // Load existing reports from server on mount
   useEffect(() => {
-    // Load existing reports and merge with mock data
-    const existingReports = getReports();
-    // Keep mock locations plus add new reports
-    setMapLocations(SYDNEY_LOCATIONS);
+    const loadReports = async () => {
+      try {
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-3e3b490b/reports/list`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const { reports } = await response.json();
+          // Merge with mock locations - you can customize this logic
+          setMapLocations(SYDNEY_LOCATIONS);
+        }
+      } catch (error) {
+        console.error('Error loading reports:', error);
+        // Keep showing mock locations if loading fails
+        setMapLocations(SYDNEY_LOCATIONS);
+      }
+    };
+
+    loadReports();
   }, []);
   
   const handleAutoDetect = async () => {
@@ -119,56 +158,70 @@ export const ReportRubbish = () => {
       return;
     }
     
-    const { report, error } = saveReport({
-      userId: user.id,
-      type,
-      description,
-      photo,
-      location: {
+    try {
+      // Submit report to server
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/make-server-3e3b490b/reports/submit`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            type,
+            description,
+            photo,
+            location: {
+              lat,
+              lng,
+              address,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit report');
+      }
+
+      const { report } = await response.json();
+      
+      // Add new location to map
+      const newLocation: LocationPoint = {
+        id: report.id,
         lat,
         lng,
         address,
-      },
-    });
-    
-    if (error) {
-      toast.error(error.message);
-      return;
+        reports: 1,
+        intensity: 0.3,
+      };
+      
+      setMapLocations([...mapLocations, newLocation]);
+      
+      toast.success('Report submitted successfully! +10 eco-points', {
+        description: 'Thank you for helping keep Sydney clean!',
+      });
+      
+      // Reset form
+      setType('');
+      setDescription('');
+      setPhoto('');
+      setLatitude('');
+      setLongitude('');
+      setAddress('');
+      setSelectedLocation(null);
+      
+      // Navigate to dashboard after a delay
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 2000);
+    } catch (error) {
+      console.error('Submit report error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to submit report');
     }
-    
-    if (!report) {
-      toast.error('Failed to submit report');
-      return;
-    }
-    
-    // Add new location to map
-    const newLocation: LocationPoint = {
-      id: report.id,
-      lat,
-      lng,
-      address,
-      reports: 1,
-      intensity: 0.3,
-    };
-    
-    setMapLocations([...mapLocations, newLocation]);
-    
-    toast.success('Report submitted successfully! +10 eco-points', {
-      description: 'Thank you for helping keep Sydney clean!',
-    });
-    
-    // Reset form
-    setType('');
-    setDescription('');
-    setPhoto('');
-    setLatitude('');
-    setLongitude('');
-    setAddress('');
-    
-    // Navigate to dashboard after a delay
-    setTimeout(() => {
-      navigate('/dashboard');
-    }, 2000);
   };
   
   const handleMapClick = async (lat: number, lng: number) => {

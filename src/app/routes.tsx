@@ -9,6 +9,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { Awareness } from './pages/Awareness';
 import { AboutUs } from './pages/AboutUs';
 import { NotFound } from './pages/NotFound';
+import { DebugUsers } from './pages/DebugUsers';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 // Root layout component that provides auth context
@@ -113,8 +114,12 @@ export const router = createBrowserRouter([
         element: <ProtectedAdmin />,
       },
       {
-        path: '/about',
+        path: '/about-us',
         element: <AboutUs />,
+      },
+      {
+        path: '/debug-users',
+        element: <DebugUsers />,
       },
       {
         path: '*',
