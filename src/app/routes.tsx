@@ -11,6 +11,8 @@ import { AboutUs } from './pages/AboutUs';
 import { NotFound } from './pages/NotFound';
 import { DebugUsers } from './pages/DebugUsers';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Root layout component that provides auth context
 const RootLayout = () => {
@@ -96,6 +98,14 @@ export const router = createBrowserRouter([
       {
         path: '/auth',
         element: <Auth />,
+      },
+      {
+        path: '/forgot-password',
+        element: <ForgotPassword />,
+      },
+      {
+        path: '/reset-password',
+        element: <ResetPassword />,
       },
       {
         path: '/dashboard',
